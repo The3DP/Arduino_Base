@@ -1,3 +1,2 @@
-# Panim 2
-Panim 2 is a more advanced python-based animation repository. 
-This repo will be worked upon after in the near future.
+Arduino_Base is a repository which will (in the near future) contain Arduino files. 
+Most of these files will be specifically made for the Arduino Uno R4 board.
