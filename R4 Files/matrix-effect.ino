@@ -1,8 +1,8 @@
-//////////////////////
-//     The3DP       //
-//Hourglass program //
-// Date: 11/6/2025  //
-//////////////////////
+////////////////////////
+// The3DP             //
+// matrix_effect.ino  //
+// November 6, 2025   //
+////////////////////////
 
 #include "Arduino_LED_Matrix.h"
 
