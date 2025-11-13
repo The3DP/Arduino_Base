@@ -1,7 +1,5 @@
 # Arduino_Base
-Arduino_Base is a repository which will (in the near future) contain Arduino files. 
-A separate packet of files will be specifically made for the Arduino Uno R4 board.
-- R4 Files are for The Arduino Uno R4
-- Ard Files are compatible with every Arduino
+Arduino_Base is a repo consisting of
+files specifically made for the Arduino Uno R4 board.
 
-#### *This repository will be completed by November 11th, 2025*
+- R4 Files are .ino files, supporting the Uno R4
