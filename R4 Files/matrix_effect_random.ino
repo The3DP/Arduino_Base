@@ -8,105 +8,128 @@
 
 ArduinoLEDMatrix matrix;
 
-// Define frames (8 rows × 12 columns)
-const uint32_t frame0[] = {
-  0b111111000000,
-  0b100000100000,
-  0b010000010000,
-  0b001000001000,
-  0b001000001000,
-  0b010000010000,
-  0b100000100000,
-  0b111111000000
-};
-
-const uint32_t frame1[] = {
-  0b111111000000,
-  0b100000100000,
-  0b010000010000,
-  0b001010001000,
-  0b001001001000,
-  0b010000010000,
-  0b100000100000,
-  0b111111000000
-};
-
-const uint32_t frame2[] = {
-  0b111111000000,
-  0b100000100000,
-  0b010101010000,
-  0b001010001000,
-  0b001000001000,
-  0b010101010000,
-  0b100000100000,
-  0b111111000000
-};
-
-const uint32_t frame3[] = {
-  0b111111000000,
-  0b100000100000,
-  0b010101010000,
-  0b001101101000,
-  0b001010101000,
-  0b010101010000,
-  0b100000100000,
-  0b111111000000
-};
-
-// Array of frames
-const uint32_t* frames[] = {frame0, frame1, frame2, frame3};
-const int numFrames = 4;
-int currentFrame = 0;
-
-// Dimensions of matrix
-const int ROWS = 8;
-const int COLS = 12;
-
-// Random pixel erase effect
-void eraseEffectRandom(const uint32_t* frame) {
-  // Copy the current frame into a temporary buffer
-  uint32_t tempFrame[ROWS];
-  for (int r = 0; r < ROWS; r++) {
-    tempFrame[r] = frame[r];
-  }
-
-  // Create an array of all pixel coordinates
-  int totalPixels = ROWS * COLS;
-  int coords[totalPixels];
-  for (int i = 0; i < totalPixels; i++) coords[i] = i;
-
-  // Shuffle pixels randomly
-  for (int i = 0; i < totalPixels; i++) {
-    int j = random(totalPixels);
-    int temp = coords[i];
-    coords[i] = coords[j];
-    coords[j] = temp;
-  }
-
-  // Gradually turn off pixels in random order
-  for (int k = 0; k < totalPixels; k++) {
-    int index = coords[k];
-    int r = index / COLS;
-    int c = index % COLS;
-
-    // Turn off bit c in row r
-    tempFrame[r] &= ~(1 << (COLS - 1 - c));
-    matrix.loadFrame(tempFrame);
-    delay(10);  // smaller = faster erase
-  }
-}
+uint8_t frame[8][12];
+unsigned long lastAddTime = 0;
+int lightsAdded = 0;
+const int maxLights = 20;
+int addInterval = 1000;        // Start with 1 second
+const int speedIncrease = 150; // Decrease interval by 150ms each cycle
+const int minInterval = 50;    // Minimum speed limit
+int cycleCount = 0;            // Track cycles for visual feedback
 
 void setup() {
   matrix.begin();
-  randomSeed(analogRead(A0));  // seed randomness
+  randomSeed(analogRead(0));   // Better random seed
+  clearFrame();
+}
+
+void clearFrame() {
+  memset(frame, 0, sizeof(frame)); // Faster clear using memset
+}
+
+void addRandomLight() {
+  // Create list of empty positions for better distribution
+  int emptyPositions[96][2]; // Max 8*12 = 96 positions
+  int emptyCount = 0;
+  
+  // Find all empty positions
+  for (int row = 0; row < 8; row++) {
+    for (int col = 0; col < 12; col++) {
+      if (frame[row][col] == 0) {
+        emptyPositions[emptyCount][0] = row;
+        emptyPositions[emptyCount][1] = col;
+        emptyCount++;
+      }
+    }
+  }
+  
+  // If there are empty positions, pick one randomly
+  if (emptyCount > 0) {
+    int choice = random(emptyCount);
+    frame[emptyPositions[choice][0]][emptyPositions[choice][1]] = 1;
+  }
+}
+
+void eraseRowByRow() {
+  // Variable erase speed - faster as cycles increase
+  int eraseDelay = max(20, 120 - (cycleCount * 10));
+  
+  // Erase from top to bottom with visual effect
+  for (int row = 0; row < 8; row++) {
+    // Flash the row before erasing
+    for (int col = 0; col < 12; col++) {
+      if (frame[row][col] == 1) {
+        frame[row][col] = 0;
+        matrix.renderBitmap(frame, 8, 12);
+        delay(eraseDelay / 4);
+        frame[row][col] = 1;
+        matrix.renderBitmap(frame, 8, 12);
+        delay(eraseDelay / 4);
+        frame[row][col] = 0;
+      }
+    }
+    matrix.renderBitmap(frame, 8, 12);
+    delay(eraseDelay);
+  }
+}
+
+void showCycleIndicator() {
+  // Brief flash to show cycle number (1-5 flashes)
+  clearFrame();
+  matrix.renderBitmap(frame, 8, 12);
+  delay(200);
+  
+  int flashes = min(cycleCount + 1, 5); // Max 5 flashes
+  for (int i = 0; i < flashes; i++) {
+    // Light up center area
+    for (int row = 3; row < 5; row++) {
+      for (int col = 5; col < 7; col++) {
+        frame[row][col] = 1;
+      }
+    }
+    matrix.renderBitmap(frame, 8, 12);
+    delay(150);
+    
+    clearFrame();
+    matrix.renderBitmap(frame, 8, 12);
+    delay(150);
+  }
+  delay(300);
 }
 
 void loop() {
-  matrix.loadFrame(frames[currentFrame]);
-  delay(400);
-
-  eraseEffectRandom(frames[currentFrame]);
-
-  currentFrame++;
-  if (currentFrame >= numFrames) currentFrame = 0;
+  unsigned long currentTime = millis();
+  
+  // Add new lights at current interval
+  if (currentTime - lastAddTime >= addInterval) {
+    if (lightsAdded < maxLights) {
+      addRandomLight();
+      lightsAdded++;
+      lastAddTime = currentTime;
+    } else {
+      // All lights added, start erasing sequence
+      eraseRowByRow();
+      
+      // Show cycle indicator
+      showCycleIndicator();
+      
+      // Increase speed for next cycle
+      addInterval = max(minInterval, addInterval - speedIncrease);
+      
+      // Reset for next cycle
+      lightsAdded = 0;
+      cycleCount++;
+      lastAddTime = currentTime;
+      
+      // Reset speed after 10 cycles to prevent it getting too fast
+      if (cycleCount >= 10) {
+        cycleCount = 0;
+        addInterval = 1000;
+      }
+    }
+  }
+  
+  // Update display
+  matrix.renderBitmap(frame, 8, 12);
+  delay(20); // Smoother refresh rate
 }
